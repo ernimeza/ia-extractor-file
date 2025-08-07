@@ -86,5 +86,7 @@ y devuelve SOLO un objeto JSON con esta estructura EXACTA (sin campos extra).
         print("OpenAI error:", e)
         raise HTTPException(500, f"Error OpenAI: {e}")
 
-    # ── Devolver JSON sin validar ─────────────────────────────────────────────
-    return JSONResponse(content=json.loads(resp.choices[0].message.content))
+    # ── Registrar y devolver JSON ─────────────────────────────────────────────
+    result_json = json.loads(resp.choices[0].message.content)  # ← dict
+    print("OpenAI result:", result_json)                       # ← logs Railway
+    return JSONResponse(content=result_json)
