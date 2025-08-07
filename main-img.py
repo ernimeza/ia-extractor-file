@@ -41,7 +41,7 @@ class TextReq(BaseModel):
     description: str
 
 @app.post("/extract-text")
-async def extract_text(req: TextReq):
+async def extract_text(req: TextReq = Body(...)):
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": [{"type": "text", "text": req.description}]}
