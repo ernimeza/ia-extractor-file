@@ -38,7 +38,8 @@ async def extract_image(
     # ── Prompt con TODOS los campos que quieres ───────────────────────────────
     system_msg = """
 Eres un extractor de datos inmobiliarios experto. Analiza las imágenes de ficha técnica
-y devuelve SOLO un objeto JSON con esta estructura EXACTA (sin campos extra, usa null si no hay dato):
+y devuelve SOLO un objeto JSON con esta estructura EXACTA (sin campos extra).
+**Si no puedes inferir un dato, escribe null (no inventes valores).**:
 
 {
   "operacion": Elige de: ['venta', 'alquiler'] (string),
