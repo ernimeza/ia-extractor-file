@@ -1,24 +1,22 @@
-import os
-import json
-import base64
+import os, json, base64
 from fastapi import FastAPI, File, UploadFile, HTTPException
+from typing import List
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import openai
 
-# ── Cargar credenciales ───────────────────────────────────────────────────────
+# ── Credenciales ──────────────────────────────────────────────────────────────
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
-MODEL = os.getenv("MODEL", "gpt-4o-mini-2024-07-18")  # modelo con visión habilitado en tu cuenta
+MODEL = os.getenv("MODEL", "gpt-4o-mini-2024-07-18")  # modelo con visión habilitado
 
-# ── Instancia FastAPI ─────────────────────────────────────────────────────────
-app = FastAPI(title="Property Extractor (image)")
+# ── App ───────────────────────────────────────────────────────────────────────
+app = FastAPI(title="Property Extractor (multi-image)")
 
-# ── Esquema de respuesta ──────────────────────────────────────────────────────
 class ExtractionResponse(BaseModel):
     operacion: str | None
     tipodepropiedad: str | None
-    ciudades: list[str] | None
+    ciudades: List[str] | None
     barrioasu: str | None
     precio: int | None
     habitaciones: str | None
@@ -30,7 +28,7 @@ class ExtractionResponse(BaseModel):
     hectareas: int | None
     m2t: int | None
     estado: str | None
-    amenidades: list[str] | None
+    amenidades: List[str] | None
     amoblado: str | None
     nombredeledificio: str | None
     piso: str | None
@@ -40,57 +38,36 @@ class ExtractionResponse(BaseModel):
 
 # ── Endpoint ──────────────────────────────────────────────────────────────────
 @app.post("/extract-image", response_model=ExtractionResponse)
-async def extract_image(file: UploadFile = File(...)):
-    # 1) Validar tipo de archivo
-    if not file.content_type or file.content_type.split("/")[0] != "image":
-        raise HTTPException(400, "Solo se aceptan imágenes")
+async def extract_image(files: List[UploadFile] = File(...)):
+    if not files:
+        raise HTTPException(400, "Se requiere al menos una imagen")
 
-    # 2) Leer y codificar en base-64
-    img_bytes = await file.read()
-    img_b64 = base64.b64encode(img_bytes).decode()
-    mime = file.content_type  # ej. image/png
+    # Convierte cada imagen en image_url Part
+    image_parts = []
+    for f in files:
+        if not f.content_type or f.content_type.split("/")[0] != "image":
+            raise HTTPException(400, f"{f.filename} no es una imagen válida")
+        img_b64 = base64.b64encode(await f.read()).decode()
+        image_parts.append({
+            "type": "image_url",
+            "image_url": {
+                "url": f"data:{f.content_type};base64,{img_b64}"
+            }
+        })
 
-    # 3) Mensajes para OpenAI
+    # Mensajes
     system_msg = """
-Eres un extractor de datos inmobiliarios experto. Analiza la imagen de la ficha técnica
-y devuelve SOLO un JSON con esta estructura EXACTA (usa null donde falte info):
-{
-  "operacion": ...,
-  "tipodepropiedad": ...,
-  "ciudades": [...],
-  "barrioasu": ...,
-  "precio": ...,
-  "habitaciones": ...,
-  "banos": ...,
-  "cocheras": ...,
-  "plantas": ...,
-  "m2": ...,
-  "anno_construccion": ...,
-  "hectareas": ...,
-  "m2t": ...,
-  "estado": ...,
-  "amenidades": [...],
-  "amoblado": ...,
-  "nombredeledificio": ...,
-  "piso": ...,
-  "estilo": ...,
-  "divisa": ...,
-  "ubicacion": ...
-}
+Eres un extractor de datos inmobiliarios experto. Analiza las siguientes imágenes
+de fichas técnicas y devuelve SOLO un JSON con esta estructura EXACTA
+(usa null donde falte data):
+{ "operacion": ..., "tipodepropiedad": ..., ... }
 """
-    image_part = {
-        "type": "image_url",
-        "image_url": {
-            "url": f"data:{mime};base64,{img_b64}"
-        }
-    }
-
     messages = [
         {"role": "system", "content": system_msg},
-        {"role": "user", "content": [image_part]},
+        {"role": "user",   "content": image_parts}
     ]
 
-    # 4) Llamar a OpenAI
+    # Llamada a OpenAI
     try:
         resp = openai.chat.completions.create(
             model=MODEL,
@@ -100,8 +77,7 @@ y devuelve SOLO un JSON con esta estructura EXACTA (usa null donde falte info):
             response_format={"type": "json_object"},
         )
     except Exception as e:
-        print("OpenAI error:", e)  # aparece en logs de Railway
+        print("OpenAI error:", e)
         raise HTTPException(500, f"Error OpenAI: {e}")
 
-    # 5) Devolver JSON
     return json.loads(resp.choices[0].message.content)
