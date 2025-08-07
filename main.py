@@ -6,10 +6,10 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 import openai
 
-# ── Carga de credenciales ─────────────────────────────────────────────────────
-load_dotenv()                                       # Lee .env en local; ignora en Railway
+# ── Cargar credenciales ───────────────────────────────────────────────────────
+load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
-MODEL = os.getenv("MODEL", "gpt-4o-mini-2024-07-18") # Asegúrate de usar un modelo con visión
+MODEL = os.getenv("MODEL", "gpt-4o-mini-2024-07-18")  # modelo con visión habilitado en tu cuenta
 
 # ── Instancia FastAPI ─────────────────────────────────────────────────────────
 app = FastAPI(title="Property Extractor (image)")
@@ -38,19 +38,19 @@ class ExtractionResponse(BaseModel):
     divisa: str | None
     ubicacion: str | None
 
-# ── Endpoint principal ────────────────────────────────────────────────────────
+# ── Endpoint ──────────────────────────────────────────────────────────────────
 @app.post("/extract-image", response_model=ExtractionResponse)
 async def extract_image(file: UploadFile = File(...)):
     # 1) Validar tipo de archivo
     if not file.content_type or file.content_type.split("/")[0] != "image":
         raise HTTPException(400, "Solo se aceptan imágenes")
-    
-    # 2) Leer y codificar
+
+    # 2) Leer y codificar en base-64
     img_bytes = await file.read()
-    img_b64   = base64.b64encode(img_bytes).decode()
-    mime      = file.content_type           # ej. image/png
-    
-    # 3) Construir mensajes para OpenAI
+    img_b64 = base64.b64encode(img_bytes).decode()
+    mime = file.content_type  # ej. image/png
+
+    # 3) Mensajes para OpenAI
     system_msg = """
 Eres un extractor de datos inmobiliarios experto. Analiza la imagen de la ficha técnica
 y devuelve SOLO un JSON con esta estructura EXACTA (usa null donde falte info):
@@ -87,12 +87,12 @@ y devuelve SOLO un JSON con esta estructura EXACTA (usa null donde falte info):
 
     messages = [
         {"role": "system", "content": system_msg},
-        {"role": "user",   "content": [image_part]}
+        {"role": "user", "content": [image_part]},
     ]
 
     # 4) Llamar a OpenAI
-     try:
-        resp = openai.chat.completions.create(      # ← SIN 'await'
+    try:
+        resp = openai.chat.completions.create(
             model=MODEL,
             messages=messages,
             temperature=0,
@@ -100,8 +100,7 @@ y devuelve SOLO un JSON con esta estructura EXACTA (usa null donde falte info):
             response_format={"type": "json_object"},
         )
     except Exception as e:
-        # Esto se verá en los logs de Railway
-        print("OpenAI error:", e)
+        print("OpenAI error:", e)  # aparece en logs de Railway
         raise HTTPException(500, f"Error OpenAI: {e}")
 
     # 5) Devolver JSON
