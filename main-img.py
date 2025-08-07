@@ -1,15 +1,15 @@
-import os, json, base64
-from fastapi import FastAPI, UploadFile, File
+import os, json, base64, io
+from fastapi import FastAPI, UploadFile, File, Body
+from pydantic import BaseModel
 import openai
+from pdf2image import convert_from_bytes
 
-# ----- Configuración -----
 openai.api_key = os.environ["OPENAI_API_KEY"]
-MODEL = "gpt-4o"  # Usa gpt-4o para visión; cambia a "gpt-4o-mini-2024-07-18" si es necesario
+MODEL = "gpt-4o"
 app = FastAPI()
 
-# Prompt system (igual al original)
 SYSTEM_PROMPT = """
-Eres un extractor de datos inmobiliarios experto. Analiza el contenido de la imagen para extraer/inferir info. Devuelve SOLO un objeto JSON con esta estructura EXACTA (sin campos extras, usa null si no hay data). Corrige ortografía/capitalización para coincidir con listas.
+Eres un extractor de datos inmobiliarios experto. Analiza el contenido proporcionado para extraer/inferir info. Devuelve SOLO un objeto JSON con esta estructura EXACTA (sin campos extras, usa null si no hay data). Corrige ortografía/capitalización para coincidir con listas.
 {
   "operacion": Elige de: ['venta', 'alquiler'] (string),
   "tipodepropiedad": Elige exactamente de: ['casas', 'departamentos', 'duplex', 'terrenos', 'oficinas', 'locales', 'edificios', 'paseos', 'depositos', 'quintas', 'estancias'] (string),
@@ -25,7 +25,7 @@ Eres un extractor de datos inmobiliarios experto. Analiza el contenido de la ima
   "hectareas": Hectáreas (integer),
   "m2t": Número de m² del terreno (integer),
   "m2c": Número de m² de construcción (integer),
-  "estado": Elige exclusivamente de las siguientes opciones, si no hay información selecciona la que mas se asemeje: ['A estrenar', 'Perfecto', 'Muy bueno', 'Bueno'] (string),
+  "estado": Elige exclusivamente de las siguientes opciones, si no hay información seleeciona la que mas se asemeje: ['A estrenar', 'Perfecto', 'Muy bueno', 'Bueno'] (string),
   "amenidades": Elige las opciones entre: ['Acceso controlado', 'Área de coworking', 'Área de parrilla', 'Área de yoga', 'Área verde', 'Bar', 'Bodega', 'Cancha de pádel', 'Cancha de tenis', 'Cancha de fútbol', 'Cerradura digital', 'Cine', 'Club house', 'Estacionamiento techado', 'Generador', 'Gimnasio', 'Laguna artificial', 'Laguna natural', 'Lavandería', 'Parque infantil', 'piscina', 'Quincho', 'Salón de eventos', 'Sala de juegos', 'Sala de masajes', 'Sala de reuniones', 'Sauna', 'Seguridad 24/7', 'Solarium', 'Spa', 'Terraza', 'Wi-Fi', 'Café', 'Business center'] (list),
   "amoblado": Elige de: ['Sí', 'No'] (string),
   "descripcion": Linda descripción de la propiedad, bien estructurada, dejando una linea al concluir el parrafo yendo al grano, con emojies y checklist con beneficios si hay contenido (string),
@@ -37,40 +37,56 @@ Eres un extractor de datos inmobiliarios experto. Analiza el contenido de la ima
 }
 """
 
-@app.post("/extract-file")
-async def extract_file(file: UploadFile = File(None)):
-    if not file:
-        return {"error": "No se proporcionó ningún archivo"}
-    
-    filename = file.filename.lower()
-    if not filename.endswith(('.jpg', '.jpeg', '.png')):  # Restringe a formatos de imagen comunes
-        return {"error": "Solo se permiten imágenes (JPG, JPEG, PNG)"}
-    
-    content = await file.read()
-    
-    # Codificar la imagen a base64
-    base64_str = base64.b64encode(content).decode('utf-8')
-    
-    user_content = [
-        {"type": "text", "text": "Extrae los datos inmobiliarios de esta imagen (ficha técnica)."}
-    ] + [
-        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_str}", "detail": "low"}}
+class TextReq(BaseModel):
+    description: str
+
+@app.post("/extract-text")
+async def extract_text(req: TextReq):
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": [{"type": "text", "text": req.description}]}
     ]
-    
+    resp = openai.chat.completions.create(
+        model=MODEL,
+        messages=messages,
+        temperature=0,
+        max_tokens=2000,
+        response_format={"type": "json_object"},
+    )
+    print("JSON de respuesta desde OpenAI:", resp.choices[0].message.content)
+    return json.loads(resp.choices[0].message.content)
+
+@app.post("/extract-file")
+async def extract_file(file: UploadFile = File(...)):
+    content = await file.read()
+    filename = file.filename.lower()
+    base64_images = []
+    if filename.endswith('.pdf'):
+        images = convert_from_bytes(content)
+        for img in images:
+            buffered = io.BytesIO()
+            img.save(buffered, format="PNG")
+            base64_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
+            base64_images.append(base64_str)
+    else:
+        base64_str = base64.b64encode(content).decode('utf-8')
+        base64_images.append(base64_str)
+    user_content = [
+        {"type": "text", "text": "Extrae los datos inmobiliarios de esta imagen o documento (ficha técnica)."}
+    ] + [
+        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}", "detail": "low"}}
+        for b64 in base64_images
+    ]
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_content}
     ]
-    
-    try:
-        resp = openai.chat.completions.create(
-            model=MODEL,
-            messages=messages,
-            temperature=0,
-            max_tokens=2000,
-            response_format={"type": "json_object"},
-        )
-        print("JSON de respuesta desde OpenAI (file):", resp.choices[0].message.content)
-        return json.loads(resp.choices[0].message.content)
-    except Exception as e:
-        return {"error": f"Error en llamada a OpenAI: {str(e)}"}
+    resp = openai.chat.completions.create(
+        model=MODEL,
+        messages=messages,
+        temperature=0,
+        max_tokens=2000,
+        response_format={"type": "json_object"},
+    )
+    print("JSON de respuesta desde OpenAI:", resp.choices[0].message.content)
+    return json.loads(resp.choices[0].message.content)
