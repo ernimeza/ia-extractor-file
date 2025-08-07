@@ -2,3 +2,5 @@ fastapi
 uvicorn
 pydantic
 openai
+pdf2image
+pillow
