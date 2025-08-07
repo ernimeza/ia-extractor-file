@@ -1,6 +1,9 @@
+# Entornos y compilados
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.venv/
 .env
-venv/
+# Otros
+*.log
