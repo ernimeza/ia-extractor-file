@@ -5,7 +5,7 @@ import openai
 from pdf2image import convert_from_bytes
 
 openai.api_key = os.environ["OPENAI_API_KEY"]
-MODEL = "gpt-4o"
+MODEL = "gpt-4o-mini-2024-07-18"
 app = FastAPI()
 
 SYSTEM_PROMPT = """
