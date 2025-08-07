@@ -9,7 +9,7 @@ import openai
 # ── Carga de credenciales ─────────────────────────────────────────────────────
 load_dotenv()                                       # Lee .env en local; ignora en Railway
 openai.api_key = os.getenv("OPENAI_API_KEY")
-MODEL = os.getenv("MODEL", "gpt-4o-vision-preview") # Asegúrate de usar un modelo con visión
+MODEL = os.getenv("MODEL", "gpt-4o-mini-2024-07-18") # Asegúrate de usar un modelo con visión
 
 # ── Instancia FastAPI ─────────────────────────────────────────────────────────
 app = FastAPI(title="Property Extractor (image)")
