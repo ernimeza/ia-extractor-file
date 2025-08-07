@@ -91,8 +91,8 @@ y devuelve SOLO un JSON con esta estructura EXACTA (usa null donde falte info):
     ]
 
     # 4) Llamar a OpenAI
-    try:
-        resp = await openai.chat.completions.create(
+     try:
+        resp = openai.chat.completions.create(      # ← SIN 'await'
             model=MODEL,
             messages=messages,
             temperature=0,
@@ -100,7 +100,7 @@ y devuelve SOLO un JSON con esta estructura EXACTA (usa null donde falte info):
             response_format={"type": "json_object"},
         )
     except Exception as e:
-        # Se loguea en Railway y se propaga el error al cliente
+        # Esto se verá en los logs de Railway
         print("OpenAI error:", e)
         raise HTTPException(500, f"Error OpenAI: {e}")
 
