@@ -68,6 +68,8 @@ y devuelve SOLO un objeto JSON con esta estructura EXACTA (sin campos extra).
   "hectareas": Hectáreas (integer)
   "m2t": Número de m² del terreno (integer)
   "m2c": Número de m² de construcción, (integer)
+  "asesor": Nombre del asesor inmobiliario, (integer)
+  "numeroasesor": Número de telefono del asesor, (integer)
   "estado": Elige exclusivamente de las siguientes opciones, si no hay información seleeciona la que mas se asemeje: ['A estrenar', 'Perfecto', 'Muy bueno', 'Bueno'] (string),
   "amenidades": Elige las opciones entre: ['Acceso controlado', 'Área de coworking', 'Área de parrilla', 'Área de yoga', 'Área verde', 'Bar', 'Bodega', 'Cancha de pádel', 'Cancha de tenis', 'Cancha de fútbol', 'Cerradura digital', 'Cine', 'Club house', 'Estacionamiento techado', 'Generador', 'Gimnasio', 'Laguna artificial', 'Laguna natural', 'Lavandería', 'Parque infantil', 'piscina', 'Quincho', 'Salón de eventos', 'Sala de juegos', 'Sala de masajes', 'Sala de reuniones', 'Sauna', 'Seguridad 24/7', 'Solarium', 'Spa', 'Terraza', 'Wi-Fi', 'Café', 'Business center'] (list),
   "amoblado": Elige de: ['Sí', 'No'] (string)
